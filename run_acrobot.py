@@ -9,7 +9,7 @@ import tensorflow as tf
 import random
 import numpy as np
 from argparse import ArgumentParser
-
+import datetime
 
 OUT_DIR = 'acrobot-experiment' # default saving directory
 MAX_SCORE_QUEUE_SIZE = 100  # number of episode scores to calculate average performance
@@ -31,9 +31,9 @@ def get_options():
                         help='initial probability for randomly sampling action')
     parser.add_argument('--FINAL_EPS', type=float, default=1e-5,
                         help='finial probability for randomly sampling action')
-    parser.add_argument('--EPS_DECAY', type=float, default=0.1,
+    parser.add_argument('--EPS_DECAY', type=float, default=0.5,
                         help='epsilon decay rate')
-    parser.add_argument('--EPS_ANNEAL_STEPS', type=int, default=60000,
+    parser.add_argument('--EPS_ANNEAL_STEPS', type=int, default=6000,
                         help='steps interval to decay epsilon')
     parser.add_argument('--LR', type=float, default=1e-4,
                         help='learning rate')
@@ -49,7 +49,6 @@ def get_options():
                         help='size of hidden layer 3')
     options = parser.parse_args()
     return options
-
 
 '''
 The DQN model itself.
@@ -99,15 +98,37 @@ class QAgent:
             action_index = env.action_space.sample()
         else:
             act_values = Q.eval(feed_dict=feed)
+            print act_values
             action_index = np.argmax(act_values)
         action = np.zeros(options.ACTION_DIM)
         action[action_index] = 1
         return action
 
+        # Sample action with random rate eps
+    def sample_action_ret(self, Q, feed, eps, options, T, is_hopping):
+        action = np.zeros(options.ACTION_DIM)
+        q = -1
+        if T > 10: # Gamma pruning
+            hop = self.weighted_lasso_state()
+            env.hop_to(last_hop)
+            return action, q, None, False
+        if random.random() <= eps and not is_hopping: # Decide to explore alternative path
+            action_index = env.action_space.sample()
+            action[action_index] = 1
+            return action, q, None, True
+        else: # "Normal" greedy learning
+            act_values = Q.eval(feed_dict=feed)
+            action_index = np.argmax(act_values)
+            action[action_index] = 1
+            q = np.max(act_values)
+            action[action_index] = 1
+            return action, q, T, is_hopping, last_hop
 
 
 def train(env):
-    
+    T = None
+    is_hopping = False
+    print datetime.datetime.now()
     # Define placeholders to catch inputs and add options
     options = get_options()
     agent = QAgent(options)
@@ -166,10 +187,20 @@ def train(env):
             env.render()
             
             obs_queue[exp_pointer] = observation
-            action = agent.sample_action(Q1, {obs : np.reshape(observation, (1, -1))}, eps, options)
+            action, q, T, is_hopping = agent.sample_action_ret(
+                Q1, {obs : np.reshape(observation, (1, -1))}, 
+                eps, 
+                options, 
+                T, 
+                is_hopping)
+            
             act_queue[exp_pointer] = action
             observation, reward, done, _ = env.step(np.argmax(action))
-            
+            if T is None:
+                T = reward + options.GAMMA*q # First hop
+            T = (T-reward)/options.GAMMA # Recursive formula
+            #print T, reward
+
             score += reward
             reward += score / 100 # Reward will be the accumulative score divied by 100
             
@@ -207,6 +238,7 @@ def train(env):
                 learning_finished = False
         if learning_finished:
             print "Testing !!!"
+            print datetime.datetime.now()
         # save progress every 100 episodes
         if learning_finished and i_episode % 100 == 0:
             saver.save(sess, 'checkpoints-acrobot/' + GAME + '-dqn', global_step = global_step)
