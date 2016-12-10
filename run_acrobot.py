@@ -13,7 +13,7 @@ from argparse import ArgumentParser
 
 OUT_DIR = 'acrobot-experiment' # default saving directory
 MAX_SCORE_QUEUE_SIZE = 100  # number of episode scores to calculate average performance
-GAME = 'Acrobot-v0'    # name of game
+GAME = 'Acrobot-v1'    # name of game
 TIMESTEP_LIMIT = 1000   # Time step limit of each episode
 
 
@@ -23,7 +23,7 @@ def get_options():
                         help='max number of episodes iteration')
     parser.add_argument('--ACTION_DIM', type=int, default=3,
                         help='number of actions one can take')
-    parser.add_argument('--OBSERVATION_DIM', type=int, default=4,
+    parser.add_argument('--OBSERVATION_DIM', type=int, default=6,
                         help='number of observations one can see')
     parser.add_argument('--GAMMA', type=float, default=0.9,
                         help='discount factor of Q learning')
