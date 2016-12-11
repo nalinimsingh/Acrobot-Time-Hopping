@@ -95,7 +95,6 @@ class QAgent:
         return observation, Q
 
     def weighted_lasso_state(self, Q, feed, options, act_queue, rwd_queue, next_obs_queue, exp_pointer, score):
-        print "starting lasso"
         env_lasso = gym.make(GAME)
         env_lasso.hop_to(env.get_state())
 
@@ -117,7 +116,7 @@ class QAgent:
 
             lasso_act_queue[exp_pointer] = action
             observation, reward, done, _ = env_lasso.step(np.argmax(action))
-            curr_state = tuple(env.get_state())
+            curr_state = tuple(env_lasso.get_state())
             score += reward
             reward += score / 100 # Reward will be the accumulative score divied by 100
             
@@ -249,7 +248,6 @@ def train(env):
             
             act_queue[exp_pointer] = action
             observation, reward, done, _ = env.step(np.argmax(action))
-            print env.get_state()
             if T is None:
                 T = reward + options.GAMMA*q # First hop
             T = (T-reward)/options.GAMMA # Recursive formula
