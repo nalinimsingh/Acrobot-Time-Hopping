@@ -172,6 +172,7 @@ def weighted_lasso_state(Q, feed, options, act_queue, rwd_queue, next_obs_queue,
         lasso_score[visited_states[hop_to]])
 
 def train(env):
+    all_scores = []
     hopping = False
     if hopping:
         T = None
@@ -297,6 +298,7 @@ def train(env):
     
         print "====== Episode {} ended with score = {}, avg_loss = {}, eps = {} ======".format(i_episode+1, score, sum_loss_value / epi_step, eps)
         score_queue.append(score)
+        all_scores.append(score)
         if len(score_queue) > MAX_SCORE_QUEUE_SIZE:
             score_queue.pop(0)
             if np.mean(score_queue) > -100:  # The threshold of being solved
@@ -309,7 +311,7 @@ def train(env):
         if i_episode % 20 == 0:
             np.savetxt("test-results/No_Hopping_"+"results.csv", score_queue, delimiter=",")
             fig = plt.figure()
-            plt.plot(np.arange(0,i_episode+1),np.asarray(score_queue))
+            plt.plot(np.arange(0,i_episode+1),np.asarray(all_scores))
             plt.xlabel('Episodes')
             plt.ylabel('Score')
             fig.savefig("test-results/No_Hopping_"+"plot.png")
