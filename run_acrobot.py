@@ -170,8 +170,11 @@ def weighted_lasso_state(Q, feed, options, act_queue, rwd_queue, next_obs_queue,
         lasso_score[visited_states[hop_to]])
 
 def train(env):
-    T = None
-    is_exploring = False
+    hopping = True
+    if hopping:
+        T = None
+        is_exploring = False
+
     print datetime.datetime.now()
     # Define placeholders to catch inputs and add options
     options = get_options()
@@ -229,34 +232,39 @@ def train(env):
             env.render()
             
             obs_queue[exp_pointer] = observation
-
-            if T > 0: # Gamma pruning           
-                hop, act_queue, rwd_queue, next_obs_queue, exp_pointer, score = weighted_lasso_state(Q1, 
-                    {obs : np.reshape(observation, (1, -1))}, options, act_queue, rwd_queue, next_obs_queue, exp_pointer, score)
-                env.hop_to(hop)
-                action = np.zeros(options.ACTION_DIM)
-                q = -1
-                T = None
-                is_exploring = False
+            if hopping:
+                if T > 500: # Gamma pruning           
+                    hop, act_queue, rwd_queue, next_obs_queue, exp_pointer, score = weighted_lasso_state(Q1, 
+                        {obs : np.reshape(observation, (1, -1))}, options, act_queue, rwd_queue, next_obs_queue, exp_pointer, score)
+                    env.hop_to(hop)
+                    action = np.zeros(options.ACTION_DIM)
+                    q = -1
+                    T = None
+                    is_exploring = False
+                else:
+                    action, q, T, is_exploring = agent.sample_action_ret(
+                        Q1, {obs : np.reshape(observation, (1, -1))}, 
+                        eps, 
+                        options, 
+                        T, 
+                        is_exploring,
+                        act_queue, 
+                        rwd_queue, 
+                        next_obs_queue, 
+                        exp_pointer, 
+                        score)
             else:
-                action, q, T, is_exploring = agent.sample_action_ret(
-                    Q1, {obs : np.reshape(observation, (1, -1))}, 
-                    eps, 
-                    options, 
-                    T, 
-                    is_exploring,
-                    act_queue, 
-                    rwd_queue, 
-                    next_obs_queue, 
-                    exp_pointer, 
-                    score)
+                action = agent.sample_action(Q1, {obs : np.reshape(observation, (1, -1))}, eps, options)
+            
             
             act_queue[exp_pointer] = action
             observation, reward, done, _ = env.step(np.argmax(action))
-            if T is None:
-                T = reward + options.GAMMA*q # First hop
-            T = (T-reward)/options.GAMMA # Recursive formula
-            #print T, reward
+
+            if hopping:
+                if T is None:
+                    T = reward + options.GAMMA*q # First hop
+                T = (T-reward)/options.GAMMA # Recursive formula
+                #print T, reward
 
             score += reward
             reward += score / 100 # Reward will be the accumulative score divied by 100
