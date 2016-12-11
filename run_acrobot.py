@@ -14,6 +14,7 @@ import copy
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 OUT_DIR = 'acrobot-experiment' # default saving directory
 MAX_SCORE_QUEUE_SIZE = 100  # number of episode scores to calculate average performance
@@ -173,7 +174,8 @@ def weighted_lasso_state(Q, feed, options, act_queue, rwd_queue, next_obs_queue,
 
 def train(env):
     all_scores = []
-    hopping = False
+    all_times = []
+    hopping = True
     if hopping:
         T = None
         is_exploring = False
@@ -217,9 +219,10 @@ def train(env):
     act_queue = np.empty([options.MAX_EXPERIENCE, options.ACTION_DIM])
     rwd_queue = np.empty([options.MAX_EXPERIENCE])
     next_obs_queue = np.empty([options.MAX_EXPERIENCE, options.OBSERVATION_DIM])
-    
+    start = time.time()
     # Score cache
     score_queue = []
+
     for i_episode in xrange(options.MAX_EPISODE):
         observation = env.reset()
         done = False
@@ -299,6 +302,8 @@ def train(env):
         print "====== Episode {} ended with score = {}, avg_loss = {}, eps = {} ======".format(i_episode+1, score, sum_loss_value / epi_step, eps)
         score_queue.append(score)
         all_scores.append(score)
+        end = time.time()
+        all_times.append(end-start)
         if len(score_queue) > MAX_SCORE_QUEUE_SIZE:
             score_queue.pop(0)
             if np.mean(score_queue) > -100:  # The threshold of being solved
@@ -309,12 +314,13 @@ def train(env):
             print "Testing !!!"
             print datetime.datetime.now()
         if i_episode % 20 == 0:
-            np.savetxt("test-results/No_Hopping_"+"results.csv", score_queue, delimiter=",")
+            np.savetxt("test-results/Hopping_"+"results.csv", all_scores, delimiter=",")
+            np.savetxt("test-results/Hopping_"+"timings.csv", all_times, delimiter=",")
             fig = plt.figure()
             plt.plot(np.arange(0,i_episode+1),np.asarray(all_scores))
             plt.xlabel('Episodes')
             plt.ylabel('Score')
-            fig.savefig("test-results/No_Hopping_"+"plot.png")
+            fig.savefig("test-results/Hopping_"+"plot.png")
         # save progress every 100 episodes
         if learning_finished and i_episode % 100 == 0:
             saver.save(sess, 'checkpoints-acrobot/' + GAME + '-dqn', global_step = global_step)
