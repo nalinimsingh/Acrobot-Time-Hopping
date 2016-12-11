@@ -239,7 +239,7 @@ def train(env):
             
             obs_queue[exp_pointer] = observation
             if hopping:
-                if T > 500: # Gamma pruning           
+                if (T > 0 and is_exploring): # Gamma pruning        
                     hop, act_queue, rwd_queue, next_obs_queue, exp_pointer, score = weighted_lasso_state(Q1, 
                         {obs : np.reshape(observation, (1, -1))}, options, act_queue, rwd_queue, next_obs_queue, exp_pointer, score)
                     env.hop_to(hop)
