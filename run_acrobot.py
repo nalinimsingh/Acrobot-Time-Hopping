@@ -95,11 +95,12 @@ class QAgent:
         return observation, Q
 
     def weighted_lasso_state(self, Q, feed, options, act_queue, rwd_queue, next_obs_queue, exp_pointer, score):
-        env_lasso = gym.make(GAME)
-        env_lasso.hop_to(env.get_state())
+        lasso_env = gym.make(GAME)
+        lasso_env.hop_to(env.get_state())
 
         visited_states = {}
         curr_state = tuple(env.get_state())
+        feed_dict = feed
 
         lasso_act_queue = copy.deepcopy(act_queue)
         lasso_rwd_queue = copy.deepcopy(rwd_queue)
@@ -109,14 +110,15 @@ class QAgent:
 
         while(curr_state not in visited_states):
             visited_states[curr_state] = 1
-            act_values = Q.eval(feed_dict=feed)
+            act_values = Q.eval(feed_dict)
+
             action_index = np.argmax(act_values)
             action = np.zeros(options.ACTION_DIM)
             action[action_index] = 1
 
             lasso_act_queue[exp_pointer] = action
-            observation, reward, done, _ = env_lasso.step(np.argmax(action))
-            curr_state = tuple(env_lasso.get_state())
+            observation, reward, done, _ = lasso_env.step(np.argmax(action))
+            curr_state = tuple(lasso_env.get_state())
             score += reward
             reward += score / 100 # Reward will be the accumulative score divied by 100
             
@@ -124,13 +126,15 @@ class QAgent:
                 reward = 1000 # If make it, send a big reward
                 observation = np.zeros_like(observation)
 
+            feed_dict = {feed.keys()[0] : np.reshape(observation, (1, -1))}
+
             lasso_rwd_queue[exp_pointer] = reward
             lasso_next_obs_queue[exp_pointer] = observation
 
             lasso_exp_pointer += 1
             if lasso_exp_pointer == options.MAX_EXPERIENCE:
                 lasso_exp_pointer = 0 # Refill the replay memory if it is full
-
+        raw_input("Enter")
         return random.choice(visited_states.keys())
 
     # Sample action with random rate eps
@@ -152,6 +156,7 @@ class QAgent:
         if T > 0: # Gamma pruning
             hop = self.weighted_lasso_state(Q, feed, options,
                 act_queue, rwd_queue, next_obs_queue, exp_pointer, score)
+            print hop
             env.hop_to(hop)
             return action, q, None, False
         if random.random() <= eps and not is_exploring: # Decide to explore alternative path
@@ -216,9 +221,7 @@ def train(env):
     
     # Score cache
     score_queue = []
-
     for i_episode in xrange(options.MAX_EPISODE):
-        
         observation = env.reset()
         done = False
         score = 0
