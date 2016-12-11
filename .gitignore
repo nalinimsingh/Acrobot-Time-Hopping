@@ -1,4 +1,7 @@
 *.mp4
 *.json
 
+*.csv
+*.png
+
 checkpoints*

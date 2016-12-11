@@ -12,6 +12,8 @@ from argparse import ArgumentParser
 import datetime
 import copy
 import random
+import numpy as np
+import matplotlib.pyplot as plt
 
 OUT_DIR = 'acrobot-experiment' # default saving directory
 MAX_SCORE_QUEUE_SIZE = 100  # number of episode scores to calculate average performance
@@ -170,7 +172,7 @@ def weighted_lasso_state(Q, feed, options, act_queue, rwd_queue, next_obs_queue,
         lasso_score[visited_states[hop_to]])
 
 def train(env):
-    hopping = True
+    hopping = False
     if hopping:
         T = None
         is_exploring = False
@@ -229,7 +231,7 @@ def train(env):
             epi_step += 1
             if global_step % options.EPS_ANNEAL_STEPS == 0 and eps > options.FINAL_EPS:
                 eps = eps * options.EPS_DECAY
-            env.render()
+            #env.render()
             
             obs_queue[exp_pointer] = observation
             if hopping:
@@ -304,6 +306,13 @@ def train(env):
         if learning_finished:
             print "Testing !!!"
             print datetime.datetime.now()
+        if i_episode % 20 == 0:
+            np.savetxt("test-results/No_Hopping_"+"results.csv", score_queue, delimiter=",")
+            fig = plt.figure()
+            plt.plot(np.arange(0,i_episode+1),np.asarray(score_queue))
+            plt.xlabel('Episodes')
+            plt.ylabel('Score')
+            fig.savefig("test-results/No_Hopping_"+"plot.png")
         # save progress every 100 episodes
         if learning_finished and i_episode % 100 == 0:
             saver.save(sess, 'checkpoints-acrobot/' + GAME + '-dqn', global_step = global_step)
