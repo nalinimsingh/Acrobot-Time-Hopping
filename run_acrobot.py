@@ -10,6 +10,8 @@ import random
 import numpy as np
 from argparse import ArgumentParser
 import datetime
+import copy
+import random
 
 OUT_DIR = 'acrobot-experiment' # default saving directory
 MAX_SCORE_QUEUE_SIZE = 100  # number of episode scores to calculate average performance
@@ -92,27 +94,68 @@ class QAgent:
         Q = tf.squeeze(tf.matmul(h3, self.W4) + self.b4)
         return observation, Q
 
+    def weighted_lasso_state(self, Q, feed, options, act_queue, rwd_queue, next_obs_queue, exp_pointer, score):
+        print "starting lasso"
+        env_lasso = gym.make(GAME)
+        env_lasso.hop_to(env.get_state())
+
+        visited_states = {}
+        curr_state = tuple(env.get_state())
+
+        lasso_act_queue = copy.deepcopy(act_queue)
+        lasso_rwd_queue = copy.deepcopy(rwd_queue)
+        lasso_next_obs_queue = copy.deepcopy(next_obs_queue)
+        lasso_exp_pointer = exp_pointer
+        lasso_score = score
+
+        while(curr_state not in visited_states):
+            visited_states[curr_state] = 1
+            act_values = Q.eval(feed_dict=feed)
+            action_index = np.argmax(act_values)
+            action = np.zeros(options.ACTION_DIM)
+            action[action_index] = 1
+
+            lasso_act_queue[exp_pointer] = action
+            observation, reward, done, _ = env_lasso.step(np.argmax(action))
+            curr_state = tuple(env.get_state())
+            score += reward
+            reward += score / 100 # Reward will be the accumulative score divied by 100
+            
+            if done:
+                reward = 1000 # If make it, send a big reward
+                observation = np.zeros_like(observation)
+
+            lasso_rwd_queue[exp_pointer] = reward
+            lasso_next_obs_queue[exp_pointer] = observation
+
+            lasso_exp_pointer += 1
+            if lasso_exp_pointer == options.MAX_EXPERIENCE:
+                lasso_exp_pointer = 0 # Refill the replay memory if it is full
+
+        return random.choice(visited_states.keys())
+
     # Sample action with random rate eps
     def sample_action(self, Q, feed, eps, options):
         if random.random() <= eps:
             action_index = env.action_space.sample()
         else:
             act_values = Q.eval(feed_dict=feed)
-            print act_values
             action_index = np.argmax(act_values)
         action = np.zeros(options.ACTION_DIM)
         action[action_index] = 1
         return action
 
         # Sample action with random rate eps
-    def sample_action_ret(self, Q, feed, eps, options, T, is_hopping):
+    def sample_action_ret(self, Q, feed, eps, options, T, is_exploring, 
+        act_queue, rwd_queue, next_obs_queue, exp_pointer, score):
         action = np.zeros(options.ACTION_DIM)
         q = -1
-        if T > 10: # Gamma pruning
-            hop = self.weighted_lasso_state()
-            env.hop_to(last_hop)
+        if T > 0: # Gamma pruning
+            hop = self.weighted_lasso_state(Q, feed, options,
+                act_queue, rwd_queue, next_obs_queue, exp_pointer, score)
+            env.hop_to(hop)
             return action, q, None, False
-        if random.random() <= eps and not is_hopping: # Decide to explore alternative path
+        if random.random() <= eps and not is_exploring: # Decide to explore alternative path
             action_index = env.action_space.sample()
             action[action_index] = 1
             return action, q, None, True
@@ -122,12 +165,11 @@ class QAgent:
             action[action_index] = 1
             q = np.max(act_values)
             action[action_index] = 1
-            return action, q, T, is_hopping, last_hop
-
+            return action, q, T, is_exploring
 
 def train(env):
     T = None
-    is_hopping = False
+    is_exploring = False
     print datetime.datetime.now()
     # Define placeholders to catch inputs and add options
     options = get_options()
@@ -163,6 +205,11 @@ def train(env):
     learning_finished = False
     
     # The replay memory
+    global obs_queue
+    global act_queue
+    global rwd_queue
+    global next_obs_queue
+
     obs_queue = np.empty([options.MAX_EXPERIENCE, options.OBSERVATION_DIM])
     act_queue = np.empty([options.MAX_EXPERIENCE, options.ACTION_DIM])
     rwd_queue = np.empty([options.MAX_EXPERIENCE])
@@ -187,15 +234,22 @@ def train(env):
             env.render()
             
             obs_queue[exp_pointer] = observation
-            action, q, T, is_hopping = agent.sample_action_ret(
+
+            action, q, T, is_exploring = agent.sample_action_ret(
                 Q1, {obs : np.reshape(observation, (1, -1))}, 
                 eps, 
                 options, 
                 T, 
-                is_hopping)
+                is_exploring,
+                act_queue, 
+                rwd_queue, 
+                next_obs_queue, 
+                exp_pointer, 
+                score)
             
             act_queue[exp_pointer] = action
             observation, reward, done, _ = env.step(np.argmax(action))
+            print env.get_state()
             if T is None:
                 T = reward + options.GAMMA*q # First hop
             T = (T-reward)/options.GAMMA # Recursive formula
