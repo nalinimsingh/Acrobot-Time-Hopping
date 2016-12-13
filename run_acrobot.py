@@ -12,6 +12,7 @@ from argparse import ArgumentParser
 import datetime
 import copy
 import random
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -20,7 +21,8 @@ OUT_DIR = 'acrobot-experiment' # default saving directory
 MAX_SCORE_QUEUE_SIZE = 100  # number of episode scores to calculate average performance
 GAME = 'Acrobot-v1'    # name of game
 TIMESTEP_LIMIT = 1000   # Time step limit of each episode
-
+global num_hops
+num_hops = 0
 
 def get_options():
     parser = ArgumentParser()
@@ -36,7 +38,7 @@ def get_options():
                         help='initial probability for randomly sampling action')
     parser.add_argument('--FINAL_EPS', type=float, default=1e-5,
                         help='finial probability for randomly sampling action')
-    parser.add_argument('--EPS_DECAY', type=float, default=0.5,
+    parser.add_argument('--EPS_DECAY', type=float, default=0.8,
                         help='epsilon decay rate')
     parser.add_argument('--EPS_ANNEAL_STEPS', type=int, default=6000,
                         help='steps interval to decay epsilon')
@@ -113,20 +115,21 @@ class QAgent:
         act_queue, rwd_queue, next_obs_queue, exp_pointer, score):
         action = np.zeros(options.ACTION_DIM)
         q = -1
-        if random.random() <= eps and not is_exploring: # Decide to explore alternative path
+        if random.random() <= eps: # Decide to explore alternative path
             action_index = env.action_space.sample()
             action[action_index] = 1
-            return action, q, None, True
+            return action, q, None, True, True
         else: # "Normal" greedy learning
             act_values = Q.eval(feed_dict=feed)
             action_index = np.argmax(act_values)
             action[action_index] = 1
             q = np.max(act_values)
             action[action_index] = 1
-            return action, q, T, is_exploring
+            return action, q, T, is_exploring, False
 
 def weighted_lasso_state(Q, feed, options, act_queue, rwd_queue, next_obs_queue, exp_pointer, score):
-    "beginning lasso selection..."
+    global num_hops
+    num_hops = num_hops+1
     lasso_env = gym.make(GAME)
     lasso_env.hop_to(env.get_state())
 
@@ -175,7 +178,7 @@ def weighted_lasso_state(Q, feed, options, act_queue, rwd_queue, next_obs_queue,
 def train(env):
     all_scores = []
     all_times = []
-    hopping = True
+    hopping = False
     if hopping:
         T = None
         is_exploring = False
@@ -248,7 +251,7 @@ def train(env):
                     T = None
                     is_exploring = False
                 else:
-                    action, q, T, is_exploring = agent.sample_action_ret(
+                    action, q, T, is_exploring, start_exploring = agent.sample_action_ret(
                         Q1, {obs : np.reshape(observation, (1, -1))}, 
                         eps, 
                         options, 
@@ -262,19 +265,18 @@ def train(env):
             else:
                 action = agent.sample_action(Q1, {obs : np.reshape(observation, (1, -1))}, eps, options)
             
-            
             act_queue[exp_pointer] = action
             observation, reward, done, _ = env.step(np.argmax(action))
 
             if hopping:
                 if T is None:
                     T = reward + options.GAMMA*q # First hop
-                T = (T-reward)/options.GAMMA # Recursive formula
-                #print T, reward
+                else if(not T > 1e10):
+                    T = (T-reward)/options.GAMMA # Recursive formula
 
             score += reward
             reward += score / 100 # Reward will be the accumulative score divied by 100
-            
+
             if done and epi_step < TIMESTEP_LIMIT:
                 reward = 1000 # If make it, send a big reward
                 observation = np.zeros_like(observation)
@@ -313,7 +315,7 @@ def train(env):
         if learning_finished:
             print "Testing !!!"
             print datetime.datetime.now()
-        if i_episode % 20 == 0:
+        if i_episode % 100 == 0:
             np.savetxt("test-results/Hopping_"+"results.csv", all_scores, delimiter=",")
             np.savetxt("test-results/Hopping_"+"timings.csv", all_times, delimiter=",")
             fig = plt.figure()
