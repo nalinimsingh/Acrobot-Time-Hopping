@@ -1,3 +1,5 @@
+We augmented Li Bin's [Deep Q Network model](https://github.com/lbbc1117/ClassicControlDQN) for solving the Acrobot control problem to use [time hopping](http://kormushev.com/papers/Kormushev_CIT-2011.pdf) for our 6.867 project. The results of our experiments are described in our [final report](Final_Report.pdf).
+
 # ClassicControlDQN
 Use single DQN model to solve 2 classic control problem: CartPole and Acrobot
 
