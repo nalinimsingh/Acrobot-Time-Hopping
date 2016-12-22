@@ -178,7 +178,7 @@ def weighted_lasso_state(Q, feed, options, act_queue, rwd_queue, next_obs_queue,
 def train(env):
     all_scores = []
     all_times = []
-    hopping = False
+    hopping = True
     if hopping:
         T = None
         is_exploring = False
@@ -271,7 +271,7 @@ def train(env):
             if hopping:
                 if T is None:
                     T = reward + options.GAMMA*q # First hop
-                else if(not T > 1e10):
+                elif(not T > 1e10):
                     T = (T-reward)/options.GAMMA # Recursive formula
 
             score += reward
